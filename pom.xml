@@ -8,7 +8,7 @@
 		<version>3.2.1</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
-	<groupId>io.getarrays</groupId>
+	<groupId>com.a1st.invoicepro</groupId>
 	<artifactId>a1stInvoicePro</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>invoicepro</name>
