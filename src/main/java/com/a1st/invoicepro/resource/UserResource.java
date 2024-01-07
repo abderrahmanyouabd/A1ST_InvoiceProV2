@@ -1,27 +1,32 @@
 package com.a1st.invoicepro.resource;
 
-import com.a1st.invoicepro.dtomapper.UserDTOMapper;
-import com.a1st.invoicepro.service.RoleService;
 import com.a1st.invoicepro.domain.HttpResponse;
 import com.a1st.invoicepro.domain.User;
 import com.a1st.invoicepro.domain.UserPrincipal;
 import com.a1st.invoicepro.dto.UserDTO;
+import com.a1st.invoicepro.dtomapper.UserDTOMapper;
+import com.a1st.invoicepro.exception.ApiException;
 import com.a1st.invoicepro.form.LoginForm;
 import com.a1st.invoicepro.provider.TokenProvider;
+import com.a1st.invoicepro.service.RoleService;
 import com.a1st.invoicepro.service.UserService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
 
+import static com.a1st.invoicepro.utils.ExceptionUtils.processError;
 import static java.time.LocalDateTime.now;
 import static java.util.Map.of;
-import static org.springframework.http.HttpStatus.CREATED;
-import static org.springframework.http.HttpStatus.OK;
+import static org.springframework.http.HttpStatus.*;
+import static org.springframework.security.authentication.UsernamePasswordAuthenticationToken.unauthenticated;
 import static org.springframework.web.servlet.support.ServletUriComponentsBuilder.fromCurrentContextPath;
 
 /**
@@ -32,18 +37,25 @@ import static org.springframework.web.servlet.support.ServletUriComponentsBuilde
 @RestController
 @RequestMapping(path = "/user")
 @RequiredArgsConstructor
-public class UserResource {
+public class UserResource  {
     private final UserService userService;
     private final RoleService roleService;
     private final AuthenticationManager authenticationManager;
     private final TokenProvider tokenProvider;
+    private final HttpServletRequest request;
+    private final HttpServletResponse response;
 
     @PostMapping("/login")
     public ResponseEntity<HttpResponse> login(@RequestBody @Valid LoginForm loginForm) {
-        authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(loginForm.getEmail(), loginForm.getPassword()));
-        UserDTO user = userService.getUserByEmail(loginForm.getEmail());
-        return user.isUsingMfa() ? sendVerificationCode(user) : sendResponse(user);
+        Authentication authentication = authenticate(loginForm.getEmail(), loginForm.getPassword());
+        UserDTO authenticatedUser = getAuthenticatedUser(authentication);
+        return authenticatedUser.isUsingMfa() ? sendVerificationCode(authenticatedUser) : sendResponse(authenticatedUser);
     }
+
+    private UserDTO getAuthenticatedUser(Authentication authentication) {
+        return ((UserPrincipal) authentication.getPrincipal()).getUser();
+    }
+
 
     @PostMapping("/register")
     public ResponseEntity<HttpResponse> saveUser(@RequestBody @Valid User user) {
@@ -57,6 +69,31 @@ public class UserResource {
                         .statusCode(CREATED.value())
                         .build());
     }
+
+    @GetMapping("/profile")
+    public ResponseEntity<HttpResponse> profile(Authentication authentication) {
+        UserDTO user = userService.getUserByEmail(authentication.getName());
+        return ResponseEntity.ok().body(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", user))
+                        .message("Profile Retrieved")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    @RequestMapping("/error")
+    public ResponseEntity<HttpResponse> handleError(HttpServletRequest request) {
+        return ResponseEntity.badRequest().body(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .reason("There is no mapping for a " + request.getMethod() + " request for this path on the server")
+                        .status(BAD_REQUEST)
+                        .statusCode(BAD_REQUEST.value())
+                        .build());
+    }
+
 
     @GetMapping("/verify/code/{email}/{code}")
     public ResponseEntity<HttpResponse> verifyCode(@PathVariable("email") String email, @PathVariable("code") String code) {
@@ -89,7 +126,17 @@ public class UserResource {
     }
 
     private UserPrincipal getUserPrincipal(UserDTO user) {
-        return new UserPrincipal(UserDTOMapper.toUser(userService.getUserByEmail(user.getEmail())), roleService.getRoleByUserId(user.getId()).getPermission());
+        return new UserPrincipal(UserDTOMapper.toUser(userService.getUserByEmail(user.getEmail())), roleService.getRoleByUserId(user.getId()));
+    }
+
+    private Authentication authenticate(String email, String password){
+        try {
+            Authentication authentication = authenticationManager.authenticate(unauthenticated(email, password));
+            return authentication;
+        } catch (AuthenticationException exception) {
+            processError(request, response, exception);
+            throw new ApiException(exception.getMessage());
+        }
     }
 
     private ResponseEntity<HttpResponse> sendVerificationCode(UserDTO user) {
