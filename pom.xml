@@ -9,7 +9,7 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>io.getarrays</groupId>
-	<artifactId>securecapita</artifactId>
+	<artifactId>a1stInvoicePro</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>securecapita</name>
 	<description>Application to manage invoices and customers</description>

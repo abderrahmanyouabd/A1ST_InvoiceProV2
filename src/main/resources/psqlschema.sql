@@ -1,12 +1,11 @@
-####################################################################
-###                                                             ####
-### Author: Junior RT                                           ####
-### License: Get Arrays LLC License (https://getarrays.io)      ####
-### Date: December 29th, 2022                                   ####
-### Version: 1.0                                                ####
-###                                                             ####
-####################################################################
-
+##########################################################################
+### -- Metadata for my schema.sql                                     ####
+###                                                                   ####
+### Author: Abderrahman Youabd                                        ####
+### License: A1ST LLC (https://abderrahmanyouabd.000webhostapp.com)   ####
+### Date: 2024-01-06                                                  ####
+### Version: 1.0                                                      ####
+##########################################################################
 /*
  * --- General Rules ---
  * Use underscore_names instead of camelCase
