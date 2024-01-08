@@ -20,6 +20,7 @@ import static com.a1st.invoicepro.dtomapper.UserDTOMapper.fromUser;
 @Service
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
+
     private final UserRepository<User> userRepository;
     private final RoleRepository<Role> roleRoleRepository;
 
@@ -56,6 +57,11 @@ public class UserServiceImpl implements UserService {
     @Override
     public void renewPassword(String key, String newPassword, String confirmPassword) {
         userRepository.renewPassword(key, newPassword, confirmPassword);
+    }
+
+    @Override
+    public UserDTO verifyAccountKey(String key) {
+        return mapToUserDTO(userRepository.verifyAccountKey(key));
     }
 
     private UserDTO mapToUserDTO(User user) {

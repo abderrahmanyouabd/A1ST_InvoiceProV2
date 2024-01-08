@@ -204,6 +204,20 @@ public class UserRepositoryImpl implements UserRepository<User>, UserDetailsServ
 
     }
 
+    @Override
+    public User verifyAccountKey(String key) {
+        try {
+            User user =  jdbc.queryForObject(SELECT_USER_BY_ACCOUNT_KEY_QUERY, of("url", getVerificationUrl(key, ACCOUNT.getType())), new UserRowMapper());
+            jdbc.update(UPDATE_USER_ENABLED_QUERY, of("enabled", true, "id", requireNonNull(user).getId()));
+            // TODO: Delete after updating so once account verified they can't access that link anymore or I can allow them and they will just keep seeing  account already verified ...(I might go with last option)
+            return user;
+        } catch (EmptyResultDataAccessException exception) {
+            throw new ApiException("This Link is not valid.");
+        } catch (Exception exception) {
+            throw new ApiException("An error occurred. Please try again.");
+        }
+    }
+
     private Boolean isLinkExpired(String key, VerificationType password) {
         try {
             return jdbc.queryForObject(SELECT_EXPIRATION_BY_URL, of("url", getVerificationUrl(key, password.getType())), Boolean.class);
