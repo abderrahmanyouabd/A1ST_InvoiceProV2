@@ -4,6 +4,7 @@ import com.a1st.invoicepro.domain.Role;
 import com.a1st.invoicepro.domain.User;
 import com.a1st.invoicepro.domain.UserPrincipal;
 import com.a1st.invoicepro.dto.UserDTO;
+import com.a1st.invoicepro.enumeration.VerificationType;
 import com.a1st.invoicepro.exception.ApiException;
 import com.a1st.invoicepro.repository.RoleRepository;
 import com.a1st.invoicepro.repository.UserRepository;
@@ -25,11 +26,14 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.util.Collection;
 import java.util.Date;
+import java.util.Objects;
 import java.util.UUID;
 
 import static com.a1st.invoicepro.enumeration.RoleType.ROLE_USER;
 import static com.a1st.invoicepro.enumeration.VerificationType.ACCOUNT;
+import static com.a1st.invoicepro.enumeration.VerificationType.PASSWORD;
 import static com.a1st.invoicepro.query.UserQuery.*;
+import static com.a1st.invoicepro.utils.SmsUtils.sendSMS;
 import static java.util.Map.of;
 import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang3.RandomStringUtils.randomAlphabetic;
@@ -127,7 +131,7 @@ public class UserRepositoryImpl implements UserRepository<User>, UserDetailsServ
         try {
             jdbc.update(DELETE_VERIFICATION_CODE_BY_USER_ID, of("id", user.getId()));
             jdbc.update(INSERT_VERIFICATION_CODE_QUERY, of("userId", user.getId(), "code", verificationCode, "expirationDate", expirationDate));
-            //sendSMS(user.getPhone(), "From: SecureCapita \nVerification code\n" + verificationCode);
+//            sendSMS(user.getPhone(), "From: SecureCapita \nVerification code\n" + verificationCode);
             log.info("Verification Code: {}", verificationCode);
         } catch (Exception exception) {
             log.error(exception.getMessage());
@@ -150,6 +154,64 @@ public class UserRepositoryImpl implements UserRepository<User>, UserDetailsServ
         } catch (EmptyResultDataAccessException exception) {
             throw new ApiException("Could not find record");
         } catch (Exception exception) {
+            throw new ApiException("An error occurred. Please try again.");
+        }
+    }
+
+    @Override
+    public void resetPassword(String email) {
+
+        if (getEmailCount(email.trim().toLowerCase() ) <= 0) throw new ApiException("There is no account for this email address.");
+        try {
+                String expirationDate = format(addDays(new Date(), 1), DATE_FORMAT);
+                User user = getUserByEmail(email);
+                String verificationUrl = getVerificationUrl(UUID.randomUUID().toString(), PASSWORD.getType());
+                jdbc.update(DELETE_PASSWORD_VERIFICATION_BY_USER_ID_QUERY, of("userId", user.getId()));
+                jdbc.update(INSERT_PASSWORD_VERIFICATION_QUERY, of("userId", user.getId(), "url", verificationUrl, "expirationDate", expirationDate));
+//                todo: Send email with url to user
+                log.info("Verification URL: " + verificationUrl);
+
+        } catch (Exception exception) {
+            throw new ApiException("An error occurred. Please try again.");
+        }
+    }
+
+    @Override
+    public User verifyPasswordKey(String key) {
+        if (isLinkExpired(key, PASSWORD)) throw new ApiException("This link has expired. Please initiate the password reset operation again.");
+        try {
+            User user = jdbc.queryForObject(SELECT_USER_BY_PASSWORD_URL_QUERY, of("url", getVerificationUrl(key, PASSWORD.getType())), new UserRowMapper());
+//            jdbc.update(DELETE_USER_FROM_PASSWORD_VERIFICATION_QUERY, of("id", user.getId())); // depends on use case do i WANT them to click on the link more than once ???
+            return user;
+        } catch (EmptyResultDataAccessException exception) {
+            log.error(exception.getMessage());
+            throw new ApiException("This link is not valid. Please reset password operation again.");
+        } catch (Exception exception) {
+            log.error(exception.getMessage());
+            throw new ApiException("An error occurred. Please try again.");
+        }
+    }
+
+    @Override
+    public void renewPassword(String key, String newPassword, String confirmPassword) {
+        if (!Objects.equals(newPassword, confirmPassword)) throw new ApiException("Passwords don't match. Please try again.");
+        try {
+            jdbc.update(UPDATE_USER_PASSWORD_BY_URL_QUERY, of("password", encoder.encode(newPassword), "url", getVerificationUrl(key, PASSWORD.getType())));
+            jdbc.update(DELETE_VERIFICATION_BY_URL_QUERY, of("url", getVerificationUrl(key, PASSWORD.getType())));
+        } catch (Exception exception) {
+            throw new ApiException("An error occurred. Please try again.");
+        }
+
+    }
+
+    private Boolean isLinkExpired(String key, VerificationType password) {
+        try {
+            return jdbc.queryForObject(SELECT_EXPIRATION_BY_URL, of("url", getVerificationUrl(key, password.getType())), Boolean.class);
+        } catch (EmptyResultDataAccessException exception) {
+            log.error(exception.getMessage());
+            throw new ApiException("This link is not valid. Please reset password operation again.");
+        } catch (Exception exception) {
+            log.error(exception.getMessage());
             throw new ApiException("An error occurred. Please try again.");
         }
     }

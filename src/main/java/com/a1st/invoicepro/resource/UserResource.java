@@ -83,6 +83,7 @@ public class UserResource  {
                         .build());
     }
 
+//    todo -> this one is not being caught by spring for some reason.
     @RequestMapping("/error")
     public ResponseEntity<HttpResponse> handleError(HttpServletRequest request) {
         return ResponseEntity.badRequest().body(
@@ -91,6 +92,43 @@ public class UserResource  {
                         .reason("There is no mapping for a " + request.getMethod() + " request for this path on the server")
                         .status(BAD_REQUEST)
                         .statusCode(BAD_REQUEST.value())
+                        .build());
+    }
+
+    @GetMapping("/reset-password/{email}")
+    public ResponseEntity<HttpResponse> resetPassword(@PathVariable("email") String email) {
+        userService.resetPassword(email);
+        return ResponseEntity.ok().body(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .message("Email sent. Please check your email to reset your password.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    @GetMapping("/verify/password/{key}")
+    public ResponseEntity<HttpResponse> verifyPasswordUrl(@PathVariable("key") String key) {
+        UserDTO user = userService.verifyPasswordKey(key);
+        return ResponseEntity.ok().body(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", user))
+                        .message("Please enter a new password")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    @PostMapping("/reset-password/{key}/{new-password}/{confirm-password}")
+    public ResponseEntity<HttpResponse> resetPasswordWithKey(@PathVariable("key") String key, @PathVariable("new-password") String newPassword, @PathVariable("confirm-password") String confirmPassword) {
+        userService.renewPassword(key, newPassword, confirmPassword);
+        return ResponseEntity.ok().body(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .message("Password reset successfully")
+                        .status(OK)
+                        .statusCode(OK.value())
                         .build());
     }
 
